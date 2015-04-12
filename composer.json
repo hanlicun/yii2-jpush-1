@@ -1,0 +1,22 @@
+{
+    "name": "wayhood/yii2-jpush",
+    "description": "none",
+    "type": "yii2-extension",
+    "keywords": ["yii2","extension","jpush"],
+    "license": "BSD-4-Clause",
+    "authors": [
+        {
+            "name": "wayhood",
+            "email": "wayhood@163.com"
+        }
+    ],
+    "require": {
+        "yiisoft/yii2": "*",
+		"jpush/jpush": "3.2.*@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "wh\\jpush\\": ""
+        }
+    }
+}
