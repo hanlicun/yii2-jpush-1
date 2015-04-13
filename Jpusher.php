@@ -40,6 +40,8 @@ class Jpusher extends Component
 
     private $_payload;
 
+    private $_logPath;
+
     public function getJpusher()
     {
         if (!is_object($this->_jpusher)) {
@@ -51,8 +53,21 @@ class Jpusher extends Component
 
     public function createJpusher()
     {
-        JPushLog::setLogHandlers(array(new StreamHandler('jpush.log', Logger::DEBUG)));
+        JPushLog::setLogHandlers(array(new StreamHandler($this->getLogPath().'/jpush.log', Logger::DEBUG)));
         return new JPushClient($this->appKey, $this->appSecret);
+    }
+
+    public function getLogPath()
+    {
+        if ($this->_logPath === null) {
+            $this->setLogPath('@app/runtime');
+        }
+        return $this->_logPath;
+    }
+
+    public function setLogPath($path)
+    {
+        $this->_logPath = Yii::getAlias($path);
     }
 
     public function getPayloadPath()
