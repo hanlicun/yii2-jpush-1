@@ -10,6 +10,7 @@ use yii\base\Component;
 use yii\base\InvalidConfigException;
 use yii\base\ViewContextInterface;
 
+use JPush\Model as M;
 use JPush\JPushClient;
 use JPush\JPushLog;
 
@@ -33,7 +34,11 @@ class Jpusher extends Component
 
     private $_jpusher;
 
-    private $_playloadPath;
+    private $_payloadPath;
+
+    private $_platform;
+
+    private $_payload;
 
     public function getJpusher()
     {
@@ -47,31 +52,40 @@ class Jpusher extends Component
     public function createJpusher()
     {
         JPushLog::setLogHandlers(array(new StreamHandler('jpush.log', Logger::DEBUG)));
-        $client = new JPushClient($this->appKey, $this->appSecret);
+        return new JPushClient($this->appKey, $this->appSecret);
     }
 
     public function getPayloadPath()
     {
-        if ($this->_playloadPath === null) {
+        if ($this->_payloadPath === null) {
             $this->setPayloadPathPath('@app/push');
         }
-        return $this->_playloadPath;
+        return $this->_payloadPath;
     }
 
     public function setPayloadPath($path)
     {
-        $this->_playloadPath = Yii::getAlias($path);
+        $this->_payloadPath = Yii::getAlias($path);
+    }
+
+    public function setPlatform($platform = 'all')
+    {
+        if (is_string($platform) && $platform = 'all') {
+            $this->_platform = M\all;
+        } elseif (is_array($platform)) {
+            $this->_platform = M\Platform($platform);
+        }
     }
 
     public function compose($id = null, array $params = [])
     {
-        $payloadFile  = $this->getPayloadPath().'/'. $id;
+        $payloadFile  = $this->getPayloadPath().'/'. $id .'.php';
         if (is_file($payloadFile)) {
-            $playload = require($playload);
-            $playload = $this->replace($playload, $params);
-
-            var_dump($playload);
+            $payload = require($payloadFile);
+            $payload = $this->replace($payload, $params);
+            $this->_payload = $payload;
         }
+        return $this;
     }
 
     public function replace($array, $params)
@@ -84,5 +98,122 @@ class Jpusher extends Component
             }
         }
         return $array;
+    }
+
+    public function send($audience = 'all')
+    {
+        $push = $this->getJpusher()->push();
+
+        $push->setPlatform($this->_platform);
+        $push->setAudience(M\all);
+
+        if (isset($this->_payload['notification'])) {
+            $params = [];
+            $notification = $this->_payload['notification'];
+            foreach($notification as $key => $value) {
+                if (is_int($key)) {
+                    $params[] = $value;
+                } else if ($key == 'ios') {
+                    $iosparams = [];
+                    if (isset($value['alert'])) {
+                        $iosparams[] = $value['alert'];
+                    } else {
+                        $iosparams[] = 'Hello Jpush';
+                    }
+
+                    if (isset($value['sound'])) {
+                        $iosparams[] = $value['sound'];
+                    } else {
+                        $iosparams[] = null;
+                    }
+
+                    if (isset($value['badge'])) {
+                        $iosparams[] = $value['badge'];
+                    } else {
+                        $iosparams[] = null;
+                    }
+
+                    if (isset($value['contentAvailable'])) {
+                        $iosparams[] = intval($value['contentAvailable']) == 1 ? true : false;
+                    } else {
+                        $iosparams[] = null;
+                    }
+
+                    if (isset($value['extras'])) {
+                        $iosparams[] = $value['extras'];
+                    } else {
+                        $iosparams[] = null;
+                    }
+
+                    if (isset($value['category'])) {
+                        $iosparams[] = $value['category'];
+                    } else {
+                        $iosparams[] = null;
+                    }
+                    //$params[] = M\ios($iosparams[0], $iosparams[1], $iosparams[2], $iosparams[3], $iosparams[4], $iosparams[5]);
+
+                    $params[] = call_user_func_array('\JPush\Model\ios', $iosparams);
+                } else if ($key == 'android') {
+                    $androidparams = [];
+
+                    if (isset($value['alert'])) {
+                        $androidparams[] = $value['alert'];
+                    } else {
+                        $androidparams[] = 'Hello Jpush';
+                    }
+
+                    if (isset($value['title'])) {
+                        $androidparams[] = $value['title'];
+                    } else {
+                        $androidparams[] = null;
+                    }
+
+                    if (isset($value['builder_id'])) {
+                        $androidparams[] = intval($value['builder_id']);
+                    } else {
+                        $androidparams[] = null;
+                    }
+
+                    if (isset($value['extras'])) {
+                        $androidparams[] = $value['extras'];
+                    } else {
+                        $androidparams[] = null;
+                    }
+
+                    $params[] = call_user_func_array('\JPush\Model\android', $androidparams);
+                }
+            }
+
+            $notification = call_user_func_array('\JPush\Model\notification', $params);
+
+            $push->setNotification($notification);
+        }
+
+        if (isset($this->_payload['message'])) {
+            $message = $this->_payload['message'];
+            $params = ['', '', null, null];
+            foreach($message as $key => $value) {
+                switch($key) {
+                    case 'content':
+                        $params[0] = $value;
+                        break;
+                    case 'title' :
+                        $params[1] = $value;
+                        break;
+                    case 'type' :
+                        $params[2] = $value;
+                        break;
+                    case 'extras' :
+                        $params[3] = $value;
+                        break;
+                }
+            }
+            $message = call_user_func_array('\JPush\Model\message', $params);
+
+            $push->setMessage($message);
+
+        }
+
+        $push->send();
     }
 } 
