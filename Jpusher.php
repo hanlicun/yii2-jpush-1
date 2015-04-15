@@ -9,6 +9,7 @@ use Yii;
 use yii\base\Component;
 use yii\base\InvalidConfigException;
 use yii\base\ViewContextInterface;
+use yii\helpers\ArrayHelper;
 
 use JPush\Model as M;
 use JPush\JPushClient;
@@ -97,10 +98,23 @@ class Jpusher extends Component
         $payloadFile  = $this->getPayloadPath().'/'. $id .'.php';
         if (is_file($payloadFile)) {
             $payload = require($payloadFile);
+            $this->merge($payload, $params);
             $payload = $this->replace($payload, $params);
             $this->_payload = $payload;
         }
         return $this;
+    }
+
+    public function merge(&$payload, &$params) {
+        $m = [];
+
+        foreach($params as $key => $value) {
+            if (!preg_match('/{.+}/is', $key)) {
+                $m[$key] = $value;
+                unset($params[$key]);
+            }
+        }
+        $payload = ArrayHelper::merge($payload, $m);
     }
 
     public function replace($array, $params)
@@ -115,12 +129,28 @@ class Jpusher extends Component
         return $array;
     }
 
-    public function send($audience = 'all')
+    public function send($audience = null)
     {
         $push = $this->getJpusher()->push();
 
         $push->setPlatform($this->_platform);
-        $push->setAudience(M\all);
+
+        $params = [];
+        if (is_null($audience) || !is_array($audience)) {
+            $push->setAudience(M\all);
+        } else {
+
+            if (isset($audience['tags'])) {
+                $params[] = call_user_func_array('\JPush\Model\tag', [$audience['tags']]);
+            }
+
+            if (isset($audience['alias'])) {
+                $params[] = call_user_func_array('\JPush\Model\alias', [$audience['alias']]);
+            }
+
+            $audience = call_user_func_array('\JPush\Model\audience', $params);
+            $push->setAudience($audience);
+        }
 
         if (isset($this->_payload['notification'])) {
             $params = [];
